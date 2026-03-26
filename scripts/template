@@ -1,0 +1,136 @@
+#!/usr/bin/env python3
+
+import sys, os, shutil
+from pathlib import Path
+
+# Paths
+TEMPLATES_DIR = Path(__file__).parent.parent / "templates"
+TEMPLATES_DIR.mkdir(exist_ok=True)
+DEFAULT_LINK = TEMPLATES_DIR / "default.py"
+
+# Colors
+GREEN, RED, YELLOW, BLUE, RESET = "\033[92m", "\033[91m", "\033[93m", "\033[94m", "\033[0m"
+def c(msg, color): return f"{color}{msg}{RESET}"
+
+def list_templates():
+    print(c("Available Templates:", BLUE))
+    
+    # Get all .py files excluding the default symlink itself
+    files = [f for f in TEMPLATES_DIR.glob("*.py") if f.name != "default.py"]
+    
+    if not files:
+        print("  None")
+        return
+
+    # Find what the symlink currently points to
+    current_default = DEFAULT_LINK.resolve() if DEFAULT_LINK.exists() else None
+
+    for f in sorted(files):
+        is_active = current_default == f.resolve()
+        
+        # Formatting logic
+        prefix = " "
+        label = f" {c('(default)', GREEN)}" if is_active else ""
+        name_display = c(f.name, GREEN) if is_active else f.name
+        
+        print(f"{prefix} {name_display}{label}")
+
+def add_template(name):
+    if not name.endswith(".py"): name += ".py"
+    target = TEMPLATES_DIR / name
+    
+    # Check if this is the first real template being added
+    is_first = not any(f for f in TEMPLATES_DIR.glob("*.py") if f.name != "default.py")
+    
+    editor = os.environ.get('EDITOR', 'nano')
+    if not target.exists():
+        content = (
+                    f"#!/usr/bin/env python3\n\n"
+                    f"import sys\n\n"
+                    f"def main():\n"
+                    f"    # TODO: Your Code Here\n"
+                    f"    pass\n\n"
+                    f"if __name__ == '__main__':\n"
+                    f"    main()\n"
+                )
+        target.write_text(content)
+    
+    # Open editor
+    os.system(f"{editor} {target}")
+    
+    # --- POST-EDIT CHECK ---
+    # Verify file exists and has content (> 0 bytes)
+    if target.exists() and target.stat().st_size > 0:
+        if is_first:
+            set_default(name, quiet=True)
+            print(c(f"✔ Added and set '{name}' as the default template.", GREEN))
+        else:
+            print(c(f"✔ Added template '{name}'.", GREEN))
+    else:
+        # Clean up if the user exited without saving or emptied the file
+        if target.exists():
+            target.unlink()
+        print(c("✘ Discarded: Template was empty or not saved.", YELLOW))
+
+def remove_template(name):
+    if not name.endswith(".py"): name += ".py"
+    target = TEMPLATES_DIR / name
+    
+    if not target.exists() or target.name == "default.py":
+        print(c(f"✘ Error: Template '{name}' not found.", RED))
+        return
+
+    is_default = False
+    if DEFAULT_LINK.exists() and DEFAULT_LINK.resolve() == target.resolve():
+        is_default = True
+        DEFAULT_LINK.unlink()
+
+    target.unlink()
+    msg = f"Removed '{name}'."
+    if is_default:
+        msg += " (Default template unset)"
+    print(c(msg, YELLOW))
+
+def set_default(name, quiet=False):
+    if not name.endswith(".py"): name += ".py"
+    source = TEMPLATES_DIR / name
+    
+    if not source.exists() or name == "default.py":
+        print(c(f"✘ Error: Template '{name}' does not exist.", RED))
+        return
+    
+    if DEFAULT_LINK.exists() or DEFAULT_LINK.is_symlink():
+        DEFAULT_LINK.unlink()
+    
+    # Relative symlink for portability within the directory
+    os.symlink(source.name, DEFAULT_LINK)
+    if not quiet:
+        print(f"Default set to -> {c(name, GREEN)}")
+
+def main():
+    usage = f"""Usage: template <command> [args]
+Commands:
+  {c('list', BLUE)}            List templates
+  {c('add', BLUE)} <name>     Add/edit a template using nano
+  {c('rm', BLUE)}  <name>     Remove a template
+  {c('set', BLUE)} <name>     Set a template as default"""
+
+    if len(sys.argv) < 2:
+        print(usage)
+        return
+    
+    cmd = sys.argv[1]
+    
+    if cmd == "list":
+        list_templates()
+    elif cmd == "add" and len(sys.argv) > 2:
+        add_template(sys.argv[2])
+    elif cmd in ["rm", "remove"] and len(sys.argv) > 2:
+        remove_template(sys.argv[2])
+    elif cmd == "set" and len(sys.argv) > 2:
+        set_default(sys.argv[2])
+    else:
+        print(usage)
+
+if __name__ == "__main__":
+    main()

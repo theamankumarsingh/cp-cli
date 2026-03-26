@@ -1,0 +1,99 @@
+#!/usr/bin/env python3
+
+import sys
+from pathlib import Path
+
+# Colors
+YELLOW = "\033[93m"
+GREEN = "\033[92m"
+RED = "\033[91m"
+RESET = "\033[0m"
+
+TEMPLATES = Path(__file__).parent.parent / "templates"
+
+def generate_alpha_name(n):
+    """Generates names like A, B... Z, AA, AB..."""
+    name = ""
+    while n >= 0:
+        name = chr(n % 26 + 65) + name
+        n = n // 26 - 1
+    return name
+
+def get_user_template():
+    """Checks if a user has set a custom template."""
+    for name in ["default", "default.py"]:
+        t_path = TEMPLATES / name
+        if t_path.exists():
+            return t_path.read_text(), name
+    return None, None
+
+def create_file_with_template(file_path, user_template):
+    """Creates a file with template if it doesn't exist, otherwise skips it."""
+    if not file_path.exists():
+        if user_template:
+            content = user_template
+        else:
+            content = (
+                f"#!/usr/bin/env python3\n\n"
+                f"import sys\n\n"
+                f"def main():\n"
+                f"    # TODO: Your Code Here\n"
+                f"    pass\n\n"
+                f"if __name__ == '__main__':\n"
+                f"    main()\n"
+            )
+        file_path.write_text(content)
+        file_path.chmod(0o755)
+        print(f"  {GREEN}+{RESET} {file_path}")
+    else:
+        # If file exists, do nothing and skip
+        print(f"  {YELLOW}!{RESET} {file_path} (skipped)")
+
+def main():
+    if len(sys.argv) < 2:
+        print("Usage:")
+        print("  contest touch a.py b.py -> Creates files in current dir with template")
+        print("  contest ABC123          -> Creates ABC123/A.py")
+        print("  contest ABC123 5        -> Creates ABC123/A.py...E.py")
+        print("  contest ABC123 x y z    -> Creates ABC123/x.py, y.py, z.py")
+        return
+
+    # Handle Templates once
+    user_template, template_name = get_user_template()
+    if user_template:
+        print(f"Using template: {GREEN}{template_name}{RESET}")
+    else:
+        print(f"{YELLOW}Warning: No default template set. Using dynamic fallback.{RESET}")
+
+    # --- Subcommand: touch ---
+    if sys.argv[1] == "touch":
+        targets = sys.argv[2:]
+        if not targets:
+            print(f"{RED}Error: touch requires at least one filename.{RESET}")
+            return
+        
+        for name in targets:
+            f_name = name if name.endswith(".py") else f"{name}.py"
+            create_file_with_template(Path(f_name), user_template)
+        return
+
+    # --- Standard: contest folder ---
+    contest_name = sys.argv[1]
+    remaining_args = sys.argv[2:]
+    
+    if not remaining_args:
+        filenames = ["A.py"]
+    elif len(remaining_args) == 1 and remaining_args[0].isdigit():
+        count = int(remaining_args[0])
+        filenames = [f"{generate_alpha_name(i)}.py" for i in range(count)]
+    else:
+        filenames = [f"{name}.py" if not name.endswith(".py") else name for name in remaining_args]
+
+    folder = Path(contest_name)
+    folder.mkdir(exist_ok=True)
+
+    for f_name in filenames:
+        create_file_with_template(folder / f_name, user_template)
+
+if __name__ == "__main__":
+    main()

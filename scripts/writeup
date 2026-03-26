@@ -1,0 +1,72 @@
+#!/usr/bin/env python3
+
+import sys
+import re
+from pathlib import Path
+
+# Colors (matching your contest command)
+YELLOW = "\033[93m"
+GREEN = "\033[92m"
+RED = "\033[91m"
+BLUE = "\033[94m"
+RESET = "\033[0m"
+
+TEMPLATE = """### Approach
+Describe your logic here...
+
+### Complexity
+- **Time:** $O()$
+- **Space:** $O()$"""
+
+def main():
+    current_dir = Path(".").resolve()
+    readme_path = current_dir / "README.md"
+    
+    # 1. Identify current .py files (ignoring the script itself)
+    py_files = sorted([f.stem for f in current_dir.glob("*.py") if f.name not in ["writeup", "writeup.py"]])
+    
+    if not py_files:
+        print(f"{YELLOW}Warning: No .py files found.{RESET}")
+        return
+
+    # 2. Handle README.md creation message
+    if not readme_path.exists():
+        print(f"{GREEN}+{RESET} {readme_path.name}")
+
+    # 3. Extract existing notes
+    existing_notes = {}
+    if readme_path.exists():
+        content = readme_path.read_text()
+        matches = re.finditer(r'^## Problem\s+([^\n]+)\s*\n(.*?)(?=\n## Problem|\Z)', content, re.MULTILINE | re.DOTALL)
+        for m in matches:
+            prob_name = m.group(1).strip()
+            prob_content = m.group(2).strip()
+            existing_notes[prob_name] = prob_content
+
+    # 4. Generate New Content
+    new_readme = []
+    new_readme.append(f"# {current_dir.name} Write-ups")
+    new_readme.append(f"**Solved Problems:** {len(py_files)}\n")
+
+    for stem in py_files:
+        new_readme.append(f"## Problem {stem}")
+        
+        if stem in existing_notes:
+            new_readme.append(existing_notes[stem])
+            print(f"{YELLOW}!{RESET} Problem {stem} (notes preserved)")
+            del existing_notes[stem]
+        else:
+            new_readme.append(TEMPLATE)
+            print(f"{GREEN}+{RESET} Problem {stem} (section created)")
+        
+        new_readme.append("") # Single newline for clean spacing
+
+    # 5. Report removed sections
+    for orphaned_stem in existing_notes.keys():
+        print(f"{RED}-{RESET} Problem {orphaned_stem} (section removed)")
+
+    # 6. Final write
+    readme_path.write_text("\n".join(new_readme).strip() + "\n")
+
+if __name__ == "__main__":
+    main()

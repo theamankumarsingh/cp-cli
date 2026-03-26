@@ -1,0 +1,119 @@
+#!/usr/bin/env python3
+
+import sys, os, shutil, urllib.request, tempfile, tarfile, re, subprocess
+from pathlib import Path
+
+# Relative to .cp-cli/scripts/cp-cli
+SCRIPT_DIR = Path(__file__).parent.resolve()
+ROOT = SCRIPT_DIR.parent
+SCRIPTS = SCRIPT_DIR
+
+VERSION = "0.1.0"
+DEPENDENCIES = ["plotext"] 
+
+REPO_TAR = "https://github.com/theamankumarsingh/cp-cli/archive/refs/heads/main.tar.gz"
+REMOTE_CPCLI = "https://raw.githubusercontent.com/theamankumarsingh/cp-cli/main/scripts/cp-cli"
+
+# Colors
+GREEN, RED, YELLOW, BLUE, RESET = "\033[92m", "\033[91m", "\033[93m", "\033[94m", "\033[0m"
+def c(msg, color): return f"{color}{msg}{RESET}" if sys.stdout.isatty() else msg
+
+def get_latest_version():
+    """Fetches the version string from the remote repository."""
+    try:
+        with urllib.request.urlopen(REMOTE_CPCLI, timeout=3) as response:
+            txt = response.read().decode()
+            m = re.search(r'VERSION\s*=\s*"([^"]+)"', txt)
+            return m.group(1) if m else None
+    except Exception:
+        return None
+
+def upgrade(force=False):
+    """Checks for updates and upgrades if a new version is found."""
+    lv = get_latest_version()
+    
+    if not lv:
+        print(c("Error: Could not fetch remote version info.", RED))
+        return
+
+    if lv == VERSION and not force:
+        print(c(f"Already up to date (v{VERSION}).", GREEN))
+        return
+
+    print(c(f"Updating: {VERSION} -> {lv} ...", YELLOW))
+    print(c("1. Downloading latest cp-cli files ...", YELLOW))
+    
+    try:
+        with tempfile.TemporaryDirectory() as t:
+            tar_path = Path(t) / "repo.tar.gz"
+            urllib.request.urlretrieve(REPO_TAR, tar_path)
+            with tarfile.open(tar_path, "r:gz") as tar:
+                tar.extractall(t)
+            
+            repo_root = next(p for p in Path(t).iterdir() if p.is_dir())
+
+            # Update Root Files
+            for fname in ["LICENSE", "README.md"]:
+                src_file = repo_root / fname
+                if src_file.exists():
+                    shutil.copy2(src_file, ROOT / fname)
+
+            src_scripts_dir = repo_root / "scripts"
+            
+            print(c("2. Synchronizing scripts ...", YELLOW))
+
+            # --- SYNCHRONIZATION LOGIC ---
+            # 1. Map files available in the new version
+            remote_filenames = {item.name for item in src_scripts_dir.iterdir() if item.is_file()}
+            
+            # 2. Remove local files that don't exist in the new version
+            for local_item in SCRIPTS.iterdir():
+                if local_item.is_file():
+                    if local_item.name not in remote_filenames:
+                        try:
+                            local_item.unlink()
+                        except Exception as e:
+                            print(c(f"Warning: Could not remove residual file {local_item.name}: {e}", YELLOW))
+
+            # 3. Copy/Overwrite new files
+            for item in src_scripts_dir.iterdir():
+                dest = SCRIPTS / item.name
+                if dest.exists():
+                    dest.unlink()  # <-- ADD THIS LINE to prevent 'Text file busy'
+                shutil.copy2(item, dest)
+                dest.chmod(0o755)
+            # -----------------------------
+            
+            print(c(f"3. Updating dependencies: {', '.join(DEPENDENCIES)} ...", YELLOW))
+            subprocess.check_call([
+                sys.executable, "-m", "pip", "install", "--upgrade", "pip"
+            ] + DEPENDENCIES, stdout=subprocess.DEVNULL)
+
+        print(c(f"Successfully upgraded to v{lv}!", GREEN))
+    except Exception as e:
+        print(c(f"Upgrade failed: {e}", RED))
+
+def main():
+    if len(sys.argv) < 2:
+        # Filter for executable files to list as available scripts
+        cmds = [p.name for p in SCRIPTS.iterdir() if p.is_file() and os.access(p, os.X_OK)]
+        maint_cmds = ["upgrade", "update", "force-upgrade", "force-update"]
+        
+        print(f"{c('[cp-cli]', BLUE)}")
+        print(f"Version  : {c(VERSION, GREEN)}")
+        print(f"Root     : {ROOT}")
+        print(f"Scripts  : {', '.join(cmds)}")
+        print(f"Commands : {', '.join(maint_cmds)}")
+        return
+
+    cmd = sys.argv[1]
+    
+    if cmd in ["force-upgrade", "force-update"]:
+        upgrade(force=True)
+    elif cmd in ["upgrade", "update"]:
+        upgrade(force=False)
+    else:
+        print(c(f"Unknown command: {cmd}", RED))
+
+if __name__ == "__main__":
+    main()

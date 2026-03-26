@@ -1,0 +1,199 @@
+#!/usr/bin/env python3
+
+import sys
+import math
+import re
+
+try:
+    import plotext as plt
+except ImportError:
+    print("\'plotext\' is required for Plot Mode.")
+    print("Please install it by activating the environment and running: pip install plotext\n")
+    sys.exit(1)
+
+GREEN = '\033[92m'
+YELLOW = '\033[93m'
+RED = '\033[91m'
+BLUE = '\033[94m'
+RESET = '\033[0m'
+
+def main():
+    # --- ADDED FOR SAFELINE ---
+    show_safeline = False
+    if len(sys.argv) > 2 and sys.argv[-1] in ["safeline", "sl"]:
+        show_safeline = True
+        sys.argv.pop() # Remove it so it doesn't affect the original logic
+    # --------------------------
+
+    # 1. Parse arguments to determine Mode
+    if len(sys.argv) < 2:
+        print("Usage:")
+        print("  Evaluate: complexity \"<expression>\" <value>")
+        print("  Plot:     complexity \"<expression>\" [safeline|sl]")
+        print("\nNote: Wrap your expression in quotes to prevent terminal syntax errors.")
+        print("Example Eval: complexity \"n^2 + log(n)\" 100")
+        print("Example Plot: complexity \"sqrt(n) * log(n)\"")
+        sys.exit(1)
+
+    # If only one argument is given, it's Plot mode. Otherwise, Eval mode.
+    if len(sys.argv) == 2:
+        mode = "plot"
+        expr_raw = sys.argv[1]
+    else:
+        mode = "eval"
+        val_str = sys.argv[-1]
+        expr_raw = "".join(sys.argv[1:-1])
+
+    # 2. Pre-process expression
+    expr_translated = expr_raw.replace('^', '**')
+
+    # 3. Define math environment
+    def custom_log(x, base=2):
+        return math.log(x, base)
+
+    safe_dict = {
+        'sqrt': math.sqrt,
+        'log': custom_log,
+        'log10': math.log10,
+        'log2': math.log2,
+        'exp': math.exp,
+        'pow': math.pow,
+        'ceil': math.ceil,
+        'floor': math.floor,
+        'abs': abs,
+        'pi': math.pi,
+        'e': math.e,
+    }
+
+    # 4. Identify the single variable
+    words = re.findall(r'[a-zA-Z_][a-zA-Z0-9_]*', expr_translated)
+    
+    for w in words:
+        if w.startswith('log') and w[3:].isdigit():
+            base = int(w[3:])
+            safe_dict[w] = lambda x, b=base: math.log(x, b)
+
+    variables = sorted(list(set(w for w in words if w not in safe_dict)))
+
+    if len(variables) > 1:
+        print(f"Error: Multiple variables detected: {', '.join(variables)}")
+        sys.exit(1)
+    
+    var_name = variables[0] if variables else "n"
+
+    # ==========================================
+    # MODE: PLOT
+    # ==========================================
+    if mode == "plot":
+
+        NUM_POINTS = 10000
+        Y_LIMIT = 1.2 * 10**6
+        
+        # --- PHASE 1: 3-Pass Adaptive Scout ---
+        current_x_min = 1.0
+        current_x_max = 10**9
+        
+        for _ in range(3):
+            step = (current_x_max - current_x_min) / 1000.0
+            exceeded = False
+            for i in range(1001):
+                x = current_x_min + i * step
+                safe_dict[var_name] = x
+                try:
+                    y = eval(expr_translated, {"__builtins__": None}, safe_dict)
+                    if abs(y) > Y_LIMIT:
+                        current_x_max = x
+                        current_x_min = max(1.0, x - step)
+                        exceeded = True
+                        break
+                except Exception:
+                    current_x_max = x
+                    current_x_min = max(1.0, x - step)
+                    exceeded = True
+                    break
+            
+            if not exceeded:
+                break
+                
+        final_x_max = current_x_max
+
+        # --- PHASE 2: High-Resolution Render with plotext ---
+        x_vals = [1 + i * (final_x_max - 1) / (NUM_POINTS - 1) for i in range(NUM_POINTS)]
+        plot_x = []
+        plot_y = []
+        
+        for x in x_vals:
+            safe_dict[var_name] = x
+            try:
+                y = eval(expr_translated, {"__builtins__": None}, safe_dict)
+                if abs(y) <= Y_LIMIT:
+                    plot_x.append(x)
+                    plot_y.append(y)
+            except Exception:
+                pass
+                
+        if not plot_y:
+            print(f"\n{RED}Error: Plot out of bounds.{RESET}\n")
+            sys.exit(1)
+            
+        x_max_label = f"{final_x_max:.1e}" if final_x_max >= 1000 else f"{final_x_max:.2f}"
+        
+        # Draw the graph using plotext
+        print(f"\n{BLUE}Plotting: {expr_raw}{RESET}")
+        plt.clf()
+        plt.plot(plot_x, plot_y, color="cyan")
+
+        # --- ADDED FOR SAFELINE ---
+        if show_safeline:
+            plt.hline(10**6, color="green")
+            plt.text("      [Safe]", plot_x[0], 1.05 * 10**6)
+        # --------------------------
+
+        plt.title(f"Complexity: O({expr_raw})")
+        plt.plotsize(85, 25) # Keeps the graph constrained nicely in standard terminal windows
+        plt.theme("clear")   # Optional: removes background styling for a cleaner look
+        plt.show()
+        print("\n")
+
+    # ==========================================
+    # MODE: EVALUATE
+    # ==========================================
+    elif mode == "eval":
+        try:
+            if variables:
+                safe_dict[var_name] = float(val_str)
+            
+            result = eval(expr_translated, {"__builtins__": None}, safe_dict)
+            
+            # Round fractional operations up to 1
+            if result > 0 and result < 1:
+                result = 1.0
+            
+            if isinstance(result, float) and result.is_integer():
+                print(int(result))
+            else:
+                print(result)
+        
+            if result > 0:
+                order = round(math.log10(result))
+                print(f"Order of Magnitude: {BLUE}{order}{RESET}")
+
+                if order <= 6:
+                    print(f"{GREEN}[Safe]{RESET}")
+                elif order == 7:
+                    print(f"{YELLOW}[Risky]{RESET}")
+                else:
+                    print(f"{RED}[TLE]{RESET}")
+                    
+            elif result == 0:
+                print(f"Order of Magnitude: {BLUE}Undefined{RESET}")
+                print(f"{GREEN}[Safe]{RESET}")
+            else:
+                print(f"{RED}[Invalid]{RESET}")
+
+        except Exception as e:
+            print(f"Error: {e}")
+            sys.exit(1)
+
+if __name__ == "__main__":
+    main()
