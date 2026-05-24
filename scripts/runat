@@ -1,0 +1,77 @@
+#!/usr/bin/env python3
+
+import sys
+import subprocess
+import shutil
+import re
+from pathlib import Path
+
+# Colors
+GREEN, RED, YELLOW, BLUE, RESET = "\033[92m", "\033[91m", "\033[93m", "\033[94m", "\033[0m"
+def c(msg, color): return f"{color}{msg}{RESET}"
+
+def test_problem(contest_id_or_url, prob_file, force=False):
+    prob_path = Path(prob_file)
+    if not prob_path.exists() and not prob_file.endswith(".py"):
+        prob_path = Path(prob_file + ".py")
+
+    if not prob_path.exists():
+        print(c(f"Error: File '{prob_file}' not found.", RED))
+        return
+
+    case_stem = prob_path.stem
+    lower_stem = case_stem.lower()
+
+    if contest_id_or_url.startswith("http"):
+        url = contest_id_or_url
+    else:
+        cid = contest_id_or_url.lower()
+        url = f"https://atcoder.jp/contests/{cid}/tasks/{cid}_{lower_stem}"
+
+    test_dir = Path("Tests") / case_stem
+    
+    if force and test_dir.exists():
+        print(c(f"Force mode: Removing {test_dir}...", YELLOW))
+        shutil.rmtree(test_dir)
+
+    if not test_dir.exists():
+        print(c(f"\n--- Downloading: {url} ---", YELLOW))
+        test_dir.parent.mkdir(exist_ok=True)
+        subprocess.run(["oj", "d", url, "-d", str(test_dir)])
+
+    if test_dir.exists():
+        print(c(f"\n--- Testing: {prob_path} ---", BLUE))
+        subprocess.run(["oj", "t", "-c", f"python3 {prob_path}", "-d", str(test_dir)])
+    else:
+        print(c(f"Error: Tests for {case_stem} not found.", RED))
+
+def main():
+    args = sys.argv[1:]
+    force_mode = False
+    if args and args[0] == "force":
+        force_mode = True
+        args = args[1:]
+
+    if not args:
+        print("Usage:")
+        print("  runat A [B...]         (Infers contest from folder name)")
+        print("  runat <url> A          (URL mode - 1 file only)")
+        print("  runat force ...        (Fresh download)")
+        return
+
+    # Case 1: URL Mode
+    if args[0].startswith("http"):
+        if len(args) != 2:
+            print(c("Error: URL mode requires exactly one problem file.", RED))
+            return
+        test_problem(args[0], args[1], force=force_mode)
+    
+    # Case 2: Auto Mode (Inferred from folder)
+    else:
+        # Folder name is the contest ID (e.g. abc340)
+        contest_id = Path.cwd().name
+        for p in args:
+            test_problem(contest_id, p, force=force_mode)
+
+if __name__ == "__main__":
+    main()

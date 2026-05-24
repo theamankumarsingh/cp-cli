@@ -17,11 +17,13 @@ It helps you:
 - manage reusable code templates,
 - evaluate and plot time-complexity expressions,
 - generate and manage problem write-ups,
+- automated testing against AtCoder and Codeforces samples,
 - keep your local scripts up to date.
 
 ## Features
 
 - `contest`: create contest folders or instantly touch files with templates.
+- `runat` / `runcf`: standardized testing with automatic sample downloads.
 - `template`: add/list/set/remove templates with a default template symlink.
 - `complexity`: evaluate and plot expressions like `n^2 + log(n)` in terminal.
 - `writeup`: scaffold and sync a local `README.md` for problem notes and complexity analysis.
@@ -66,122 +68,63 @@ source .cp-cli/bin/activate
 
 ```bash
 source .cp-cli/bin/activate
-cp-cli
-contest ABC123 5
+contest abc340 6
+cd abc340
+# Solve A.py, then test it:
+runat abc340 A
+# Document progress:
 writeup
-template add fastio
-template set fastio
-complexity "n^2 + log(n)" 100000
-complexity "n*log(n)" safeline
 ```
 
 ## Commands
 
 ### `cp-cli`
-
 Toolkit manager command:
-
 - `cp-cli` shows version, root, available scripts, and maintenance commands.
-- `cp-cli upgrade` or `cp-cli update` checks remote version and performs a **clean sync** (adds new scripts, updates existing ones, and removes deprecated residuals).
-- `cp-cli force-upgrade` or `cp-cli force-update` forces a full script sync and refreshes Python dependencies (e.g., `plotext`) even if the version hasn't changed.
+- `cp-cli upgrade` checks remote version and performs a **clean sync** (adds new scripts and removes deprecated residuals).
 
 ### `contest`
-
 Create contest folder and Python solution files.
-
-Usage:
-
 ```bash
-contest <contest_name>
-contest <contest_name> <count>
-contest <contest_name> <file1> <file2> ...
+contest <contest_name> [count|files...]
 contest touch <file1> [file2...]
 ```
+- **Templates:** New files are populated with your default template.
+- **Safety:** `touch` will skip existing files to avoid overwriting your code.
 
-Examples:
+### `runat` / `runcf`
+Automated testing using `online-judge-tools`.
+- **Automatic Context:** Infers the contest ID from your current directory name.
+    - `runat`: Uses the full folder name (e.g., `abc340`).
+    - `runcf`: Extracts the numeric ID from the folder name (e.g., `CF1927` -> `1927`).
+- **Download & Test:** Downloads samples to `Tests/<filename_stem>` if missing.
+- **Fast Mode:** If the `Tests/` folder for that problem exists, it skips downloading.
+- **Force Mode:** Use `runat force A` to delete local tests and re-download.
+- **URL Mode:** Provide a full URL as the first argument to test exactly one file.
 
 ```bash
-contest ABC123
-# Creates: ABC123/A.py
-
-contest ABC123 5
-# Creates: A.py, B.py, C.py, D.py, E.py
-
-contest ABC123 x y z
-# Creates: x.py, y.py, z.py
-
-contest touch helper logic
-# Instantly creates helper.py and logic.py in the current directory
+runat A B                # Tests A.py and B.py (Context inferred from folder)
+runcf A                  # Tests A.py (Context inferred from folder)
+runat force A            # Wipes Tests/A and re-downloads samples
+runat <URL> A            # Tests A.py against a specific problem URL
 ```
-
-Template behavior:
-- If `templates/default` or `templates/default.py` exists, it is used.
-- Otherwise, a fallback Python starter file is generated.
+*Note: Since the toolkit environment includes `online-judge-tools`, you can also use the `oj` command directly for advanced tasks (e.g., `oj s` to submit).*
 
 ### `writeup`
-
-Generate or update a local README.md in your contest folder to store problem approaches and time/space complexities.
-
-Usage:
-
-```bash
-writeup
-```
-
-Behavior:
-- Scans the current directory for .py solution files.
-- Creates a README.md if it doesn't exist, initializing it with a problem count and a template for each .py file.
-- Adds a clean Markdown template (### Approach, ### Complexity) for newly created problems.
-- Safely preserves any existing notes you've already written.
-- Automatically cleans up (removes) sections for .py files that have been deleted from the directory.
+Generate or update a local `README.md` in your contest folder to store problem approaches and complexities.
+- Scans for `.py` files, preserves existing notes, and removes sections for deleted files.
 
 ### `template`
-
 Manage reusable templates in `.cp-cli/templates`.
-
-Usage:
-
-```bash
-template list
-template add <name>
-template rm <name>
-template set <name>
-```
-
-Notes:
-- `template add <name>` opens `$EDITOR` (defaults to `nano`) to edit/create `<name>.py`.
-- The first valid template added is auto-set as default.
-- Default template is stored as symlink: `.cp-cli/templates/default.py`.
+- `template add <name>`: opens `$EDITOR` to create a template.
+- `template set <name>`: symlinks the template as the default for `contest`.
 
 ### `complexity`
-
 Evaluate or plot complexity expressions.
-
-Usage:
-
 ```bash
-complexity "<expression>" <value>
-complexity "<expression>" [safeline|sl]
-```
-
-Examples:
-
-```bash
-complexity "n^2 + log(n)" 100
-complexity "sqrt(n) * log(n)"
+complexity "n^2 + log(n)" 100000
 complexity "n*log(n)" sl
 ```
-
-Expression notes:
-- Use quotes around expressions.
-- `^` is treated as exponent (`**`).
-- Supports: `sqrt`, `log` (base 2), `log10`, `log2`, `exp`, `pow`, `ceil`, `floor`, `abs`, `pi`, `e`.
-- Supports custom log-base shorthand like `log3(n)`.
-
-Result classification (eval mode):
-- order <= 6: Safe
-- order == 7: Risky
-- order > 7: TLE
 
 ## Updating
 
@@ -190,24 +133,17 @@ source .cp-cli/bin/activate
 cp-cli upgrade
 ```
 
-Use `cp-cli force-upgrade` to re-sync scripts and dependencies even if versions match.
-
 ## Uninstall
 
 From your project root:
-
 ```bash
 deactivate 2>/dev/null || true
 rm -rf .cp-cli
 ```
 
-Optional: remove the `.cp-cli/` line from `.gitignore` if you do not need it anymore.
-
 ## Community
 
-We welcome meaningful improvements to this repository, including bug fixes, better documentation, performance enhancements, and new ideas that help competitive programmers.
-
-If you want to contribute, open an issue to discuss your idea or submit a pull request directly. Open-source collaboration is encouraged and appreciated.
+We welcome meaningful improvements! If you want to contribute, open an issue or submit a pull request.
 
 ## Contributors
 
