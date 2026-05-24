@@ -8,7 +8,7 @@ SCRIPT_DIR = Path(__file__).parent.resolve()
 ROOT = SCRIPT_DIR.parent
 SCRIPTS = SCRIPT_DIR
 
-VERSION = "0.3.0"
+VERSION = "0.4.0"
 DEPENDENCIES = ["plotext", "https://github.com/online-judge-tools/oj/archive/refs/tags/v12.0.0.zip"]
 
 REPO_TAR = "https://github.com/theamankumarsingh/cp-cli/archive/refs/heads/main.tar.gz"

@@ -58,6 +58,10 @@ def main():
         print("  contest ABC123 x y z    -> Creates ABC123/x.py, y.py, z.py")
         return
 
+    # If only 'contest ABC123' is called and folder exists, exit immediately
+    if len(sys.argv) == 2 and sys.argv[1] != "touch" and Path(sys.argv[1]).is_dir():
+        return
+
     # Handle Templates once
     user_template, template_name = get_user_template()
     if user_template:

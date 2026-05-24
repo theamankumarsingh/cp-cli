@@ -22,7 +22,7 @@ It helps you:
 
 ## Features
 
-- `contest`: create contest folders or instantly touch files with templates.
+- `contest`: create contest folders (and automatically navigating into them) or instantly touch files with templates.
 - `runat` / `runcf`: standardized testing with automatic sample downloads.
 - `template`: add/list/set/remove templates with a default template symlink.
 - `complexity`: evaluate and plot expressions like `n^2 + log(n)` in terminal.
@@ -53,6 +53,14 @@ curl -fsSL https://github.com/theamankumarsingh/cp-cli/archive/refs/heads/main.t
 chmod +x .cp-cli/scripts/* && \
 ./.cp-cli/bin/python3 ./.cp-cli/scripts/cp-cli force-upgrade && \
 echo 'export PATH="$VIRTUAL_ENV/scripts:$PATH"' >> .cp-cli/bin/activate && \
+python3 -c "f='.cp-cli/bin/activate'; c=open(f).read(); open(f,'w').write(c.replace('unset -f deactivate', 'unset -f contest\n        unset -f deactivate'))" && \
+echo '
+contest() {
+    command contest "$@"
+    if [ -n "$1" ] && [ "$1" != "touch" ] && [ -d "$1" ]; then
+        cd "$1"
+    fi
+}' >> .cp-cli/bin/activate && \
 { grep -qxF '.cp-cli/' .gitignore 2>/dev/null || echo '.cp-cli/' >> .gitignore; } && \
 echo -e '\n\033[92m✔ cp-cli installed successfully!\033[0m' && \
 echo -e 'Run: \033[94msource .cp-cli/bin/activate\033[0m to start.'
@@ -67,12 +75,18 @@ source .cp-cli/bin/activate
 ## Quick Start
 
 ```bash
+# Activate environment
 source .cp-cli/bin/activate
+
+# Scaffold 6 files and auto-cd
 contest abc340 6
-cd abc340
-# Solve A.py, then test it:
-runat abc340 A
-# Document progress:
+
+# (Solve A.py)
+
+# Download samples & test
+runat A
+
+# Generate write-up
 writeup
 ```
 
@@ -89,6 +103,7 @@ Create contest folder and Python solution files.
 contest <contest_name> [count|files...]
 contest touch <file1> [file2...]
 ```
+- **Auto-cd:** Automatically switches your terminal to the new contest folder.
 - **Templates:** New files are populated with your default template.
 - **Safety:** `touch` will skip existing files to avoid overwriting your code.
 
